@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>To-Do List</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f9f9f9;
+            color: #333;
+            max-width: 600px;
+            margin: 2rem auto;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #222;
+        }
+
+        form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 0.6rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        button {
+            padding: 0.6rem 1rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        li {
+            display: flex;
+            align-items: center;
+            background-color: #fff;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: background-color 0.2s ease;
+        }
+
+        li.completed span {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        li:hover {
+            background-color: #f1f1f1;
+        }
+
+        li input[type="checkbox"] {
+            margin-right: 1rem;
+            transform: scale(1.2);
+        }
+
+        li span {
+            flex-grow: 1;
+            font-size: 1rem;
+        }
+
+        li button {
+            background-color: #dc3545;
+            font-size: 0.9rem;
+            padding: 0.4rem 0.8rem;
+        }
+
+        li button:hover {
+            background-color: #a71d2a;
+        }
+
+        body.dark {
+            background: #121212;
+            color: #eee;
+            box-shadow: none;
+        }
+
+        body.dark h1 {
+            color: #ddd;
+        }
+
+        body.dark input[type="text"] {
+            background: #222;
+            color: #eee;
+            border: 1px solid #555;
+        }
+
+        body.dark button {
+            background-color: #1a73e8;
+            color: #eee;
+        }
+
+        body.dark button:hover {
+            background-color: #155ab6;
+        }
+
+        body.dark ul li {
+            background-color: #1e1e1e;
+            box-shadow: none;
+            border: 1px solid #333;
+        }
+
+        body.dark ul li.completed span {
+            color: #666;
+        }
+
+        body.dark ul li:hover {
+            background-color: #333;
+        }
+
+        body.dark ul li button {
+            background-color: #e55353;
+        }
+
+        body.dark ul li button:hover {
+            background-color: #b33434;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            to {
+                opacity: 0;
+                transform: translateY(-10px);
+                height: 0;
+                margin: 0;
+                padding: 0;
+            }
+        }
+
+        li.fade-in {
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        li.fade-out {
+            animation: fadeOut 0.3s ease forwards;
+        }
+    </style>
+
+</head>
+
+<body>
+    <h1>To-Do List</h1>
+    <button id="toggle-dark" style="margin-bottom:1rem;">🌙 Dark Mode</button>
+    <form id="task-form">
+        <input type="text" id="task-title" placeholder="New task..." required />
+        <button type="submit">Add Task</button>
+    </form>
+
+    <ul id="task-list"></ul>
+
+    <script>
+        const apiBase = 'http://localhost:5000/tasks';
+        const taskList = document.getElementById('task-list');
+        const taskForm = document.getElementById('task-form');
+        const taskInput = document.getElementById('task-title');
+
+    
+        // Add a new task
+        taskForm.onsubmit = async e => {
+            e.preventDefault();
+            const title = taskInput.value.trim();
+            if (!title) return;
+
+            await fetch(apiBase, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title })
+            });
+
+            taskInput.value = '';
+            fetchTasks();
+        };
+
+        // Toggle task completed status
+        async function toggleCompleted(id, completed) {
+            await fetch(`${apiBase}/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ completed })
+            });
+            fetchTasks();
+        }
+
+        // Delete a task
+        async function deleteTask(id) {
+            await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+            fetchTasks();
+        }
+
+        // Initial load
+        fetchTasks();
+        const toggleBtn = document.getElementById('toggle-dark');
+
+        toggleBtn.onclick = () => {
+            document.body.classList.toggle('dark');
+
+            // Change button text/icon accordingly
+            if (document.body.classList.contains('dark')) {
+                toggleBtn.textContent = '☀️ Light Mode';
+            } else {
+                toggleBtn.textContent = '🌙 Dark Mode';
+            }
+        };
+        async function fetchTasks() {
+            const res = await fetch(apiBase);
+            const tasks = await res.json();
+            taskList.innerHTML = '';
+            tasks.forEach(task => {
+                const li = document.createElement('li');
+                li.className = task.completed ? 'completed fade-in' : 'fade-in';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = task.completed;
+                checkbox.onchange = () => toggleCompleted(task.id, checkbox.checked);
+
+                const span = document.createElement('span');
+                span.textContent = task.title;
+                span.style.cursor = 'pointer';
+
+                // On click, replace span with input for editing
+                span.onclick = () => {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = span.textContent;
+                    input.style.flexGrow = '1';
+                    input.style.fontSize = '1rem';
+
+                    // Replace span with input
+                    span.replaceWith(input);
+                    input.focus();
+
+                    // Save on Enter
+                    input.onkeydown = async (e) => {
+                        if (e.key === 'Enter') {
+                            const newTitle = input.value.trim();
+                            if (newTitle) {
+                                await fetch(`${apiBase}/${task.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ title: newTitle })
+                                });
+                                input.replaceWith(span);
+                                span.textContent = newTitle;
+                            } else {
+                                // If empty, don't update, just revert
+                                input.replaceWith(span);
+                            }
+                        }
+                        // Cancel edit on Escape
+                        if (e.key === 'Escape') {
+                            input.replaceWith(span);
+                        }
+                    };
+
+                    // Blur cancels edit (optional)
+                    input.onblur = () => {
+                        input.replaceWith(span);
+                    };
+                };
+
+
+                const delBtn = document.createElement('button');
+                delBtn.textContent = 'Delete';
+                delBtn.onclick = () => deleteTaskWithAnimation(li, task.id);
+
+                li.appendChild(checkbox);
+                li.appendChild(span);
+                li.appendChild(delBtn);
+                taskList.appendChild(li);
+            });
+        }
+
+        // New delete function with fade out
+        async function deleteTaskWithAnimation(liElement, id) {
+            liElement.classList.add('fade-out');
+
+            // Wait for animation to finish before deleting from backend & removing from DOM
+            liElement.addEventListener('animationend', async () => {
+                await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+                liElement.remove();
+            }, { once: true });
+        }
+    </script>
+</body>
+
+</html>
