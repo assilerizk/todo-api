@@ -192,12 +192,12 @@
     <ul id="task-list"></ul>
 
     <script>
-        const apiBase = 'http://localhost:5000/tasks';
         const taskList = document.getElementById('task-list');
         const taskForm = document.getElementById('task-form');
         const taskInput = document.getElementById('task-title');
+        const userId = 2; // Replace with actual user ID after registration/login
+        const apiBase = `http://localhost:5000/tasks`;
 
-    
         // Add a new task
         taskForm.onsubmit = async e => {
             e.preventDefault();
@@ -207,7 +207,7 @@
             await fetch(apiBase, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title })
+                body: JSON.stringify({ title, user_id: userId })
             });
 
             taskInput.value = '';
@@ -245,7 +245,7 @@
             }
         };
         async function fetchTasks() {
-            const res = await fetch(apiBase);
+            const res = await fetch(`${apiBase}?user_id=${userId}`);
             const tasks = await res.json();
             taskList.innerHTML = '';
             tasks.forEach(task => {

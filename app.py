@@ -1,23 +1,56 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+import datetime
 import sqlite3
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5500", "http://127.0.0.1:5500"])  # Make sure both are allowed
+CORS(app, origins=["http://localhost:5500", "http://localhost:5500/tasks", "http://127.0.0.1:5500"])
+
+def get_db_connection():
+    conn = sqlite3.connect('tasks.db')
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
 
 def init_db():
-    conn = sqlite3.connect('tasks.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    ''')
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             title TEXT NOT NULL,
-            completed BOOLEAN NOT NULL DEFAULT 0
+            completed BOOLEAN NOT NULL DEFAULT 0,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )
     ''')
+    cursor.execute("SELECT id FROM users WHERE username = 'testuser'")
+    if not cursor.fetchone():
+        from werkzeug.security import generate_password_hash
+        hashed = generate_password_hash("test123")
+        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", ('testuser', hashed))
+
     conn.commit()
     conn.close()
+# Temporary route for testing
+@app.route("/default-user-id")
+def get_test_user():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE username = 'testuser'")
+    user = cursor.fetchone()
+    conn.close()
+    return jsonify({"user_id": user[0]})
 
 def validate_json(*required_fields):
     def decorator(f):
@@ -34,28 +67,65 @@ def validate_json(*required_fields):
         return wrapped
     return decorator
 
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    hashed_password = generate_password_hash(password)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check if username already exists
+    cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+    if cursor.fetchone():
+        conn.close()
+        return jsonify({"error": "Username already taken"}), 409
+
+    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+
+    return jsonify({"message": "User registered successfully", "user_id": user_id}), 201
+
 @app.route("/")
 def home():
     return "To-Do API is live!"
 
 @app.route("/tasks", methods=["GET"])
 def get_tasks():
-    conn = sqlite3.connect('tasks.db')
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, title, completed FROM tasks")
-    rows = cursor.fetchall()
+    cursor.execute("SELECT id, title, completed FROM tasks WHERE user_id = ?", (user_id,))
+    tasks = [
+        {"id": row["id"], "title": row["title"], "completed": bool(row["completed"])}
+        for row in cursor.fetchall()
+    ]
     conn.close()
-    tasks = [{"id": r[0], "title": r[1], "completed": bool(r[2])} for r in rows]
-    return jsonify(tasks)
+    return jsonify(tasks), 200
 
 @app.route("/tasks", methods=["POST"])
-@validate_json('title')
+@validate_json('title', 'user_id')
 def create_task():
     data = request.get_json()
+    user_id = data.get("user_id")
     title = data.get('title').strip()
-    conn = sqlite3.connect('tasks.db')
+
+    if not user_id or not title:
+        return jsonify({"error": "User ID and title are required"}), 400
+    
+    conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO tasks (title, completed) VALUES (?, ?)", (title, 0))
+    cursor.execute("INSERT INTO tasks (user_id, title, completed) VALUES (?, ?, ?)", (user_id, title, 0))
     conn.commit()
     new_id = cursor.lastrowid
     conn.close()
@@ -79,7 +149,7 @@ def update_task(task_id):
     if title is None and completed is None:
         return jsonify({"error": "At least one of 'title' or 'completed' must be provided"}), 400
 
-    conn = sqlite3.connect('tasks.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     if title is not None:
         cursor.execute("UPDATE tasks SET title = ? WHERE id = ?", (title.strip(), task_id))
@@ -96,7 +166,7 @@ def update_task(task_id):
 
 @app.route("/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
-    conn = sqlite3.connect('tasks.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
