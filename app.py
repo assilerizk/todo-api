@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 import datetime
 import sqlite3
+import logging
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5500", "http://localhost:5500/tasks", "http://127.0.0.1:5500"])
@@ -42,15 +43,6 @@ def init_db():
 
     conn.commit()
     conn.close()
-# Temporary route for testing
-@app.route("/default-user-id")
-def get_test_user():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT id FROM users WHERE username = 'testuser'")
-    user = cursor.fetchone()
-    conn.close()
-    return jsonify({"user_id": user[0]})
 
 def validate_json(*required_fields):
     def decorator(f):
@@ -70,10 +62,12 @@ def validate_json(*required_fields):
 @app.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
+    logging.info(f"Received registration data: {data}")
     username = data.get("username")
     password = data.get("password")
 
     if not username or not password:
+        logging.warning("Missing username or password in registration")
         return jsonify({"error": "Username and password required"}), 400
 
     hashed_password = generate_password_hash(password)
@@ -91,7 +85,7 @@ def register():
     conn.commit()
     user_id = cursor.lastrowid
     conn.close()
-
+    logging.info(f"User '{username}' registered successfully with id {user_id}")
     return jsonify({"message": "User registered successfully", "user_id": user_id}), 201
 
 @app.route("/")

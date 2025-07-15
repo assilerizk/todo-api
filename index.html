@@ -177,26 +177,89 @@
         li.fade-out {
             animation: fadeOut 0.3s ease forwards;
         }
-    </style>
 
+        #tasks-container {
+            animation: fadeIn 0.4s ease forwards;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>To-Do List</h1>
-    <button id="toggle-dark" style="margin-bottom:1rem;">🌙 Dark Mode</button>
-    <form id="task-form">
-        <input type="text" id="task-title" placeholder="New task..." required />
-        <button type="submit">Add Task</button>
-    </form>
 
-    <ul id="task-list"></ul>
-
+    <div id="signup-container"
+        style="margin-bottom: 2rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1);">
+        <h1 style="margin-top: 0;">Sign Up</h1>
+        <form id="signupForm" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <input type="text" id="signup-username" placeholder="Username" required
+                style="padding: 0.6rem; border-radius: 6px; border: 1px solid #ccc;">
+            <input type="password" id="signup-password" placeholder="Password" required
+                style="padding: 0.6rem; border-radius: 6px; border: 1px solid #ccc;">
+            <button type="submit"
+                style="padding: 0.6rem; border-radius: 6px; background-color: #007bff; color: white; border: none; font-size: 1rem; cursor: pointer;">
+                Register
+            </button>
+            <p id="signup-message" style="margin: 0; font-size: 0.9rem;"></p>
+        </form>
+    </div>
+    <div id="todo-app" style="display: none;">
+        <h1>To-Do List</h1>
+        <button id="toggle-dark" style="margin-bottom:1rem;">🌙 Dark Mode</button>
+        <form id="task-form">
+            <input type="text" id="task-title" placeholder="New task..." required />
+            <button type="submit">Add Task</button>
+        </form>
+        <ul id="task-list"></ul>
+    </div>
     <script>
         const taskList = document.getElementById('task-list');
         const taskForm = document.getElementById('task-form');
         const taskInput = document.getElementById('task-title');
-        const userId = 2; // Replace with actual user ID after registration/login
+        window.currentUserId = null;
         const apiBase = `http://localhost:5000/tasks`;
+        document.getElementById('signupForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            const message = document.getElementById('signup-message');
+
+            try {
+                const response = await fetch('http://localhost:5000/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.currentUserId = data.user_id;
+                    console.log("Registration succeeded, user ID:", currentUserId);
+
+                    message.textContent = '✅ Registration successful!';
+                    message.style.color = 'green';
+
+                    const signupContainer = document.getElementById('signup-container');
+                    const todoApp = document.getElementById('todo-app');
+
+                    if (!signupContainer || !todoApp) {
+                        console.error('Missing #signup-container or #todo-app in the DOM');
+                        return;
+                    }
+
+                    signupContainer.style.display = 'none';
+                    todoApp.style.display = 'block';
+                    fetchTasks();
+                } else {
+                    message.textContent = `❌ ${data.message || 'Registration failed.'}`;
+                    message.style.color = 'red';
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                message.textContent = '❌ Error connecting to the server.';
+                message.style.color = 'red';;
+            }
+        });
 
         // Add a new task
         taskForm.onsubmit = async e => {
@@ -204,14 +267,26 @@
             const title = taskInput.value.trim();
             if (!title) return;
 
-            await fetch(apiBase, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, user_id: userId })
-            });
+            try {
+                const response = await fetch(apiBase, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, user_id: window.currentUserId }) // use window.currentUserId explicitly
+                });
 
-            taskInput.value = '';
-            fetchTasks();
+                if (!response.ok) {
+                    const errData = await response.json();
+                    console.error('Failed to create task:', errData);
+                    alert('Failed to create task: ' + (errData.error || 'Unknown error'));
+                    return;
+                }
+
+                taskInput.value = '';
+                fetchTasks();
+            } catch (err) {
+                console.error('Network or server error:', err);
+                alert('Error creating task.');
+            }
         };
 
         // Toggle task completed status
@@ -231,7 +306,7 @@
         }
 
         // Initial load
-        fetchTasks();
+        //fetchTasks();
         const toggleBtn = document.getElementById('toggle-dark');
 
         toggleBtn.onclick = () => {
@@ -245,7 +320,7 @@
             }
         };
         async function fetchTasks() {
-            const res = await fetch(`${apiBase}?user_id=${userId}`);
+            const res = await fetch(`${apiBase}?user_id=${currentUserId}`);
             const tasks = await res.json();
             taskList.innerHTML = '';
             tasks.forEach(task => {
