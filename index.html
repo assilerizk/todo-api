@@ -187,14 +187,15 @@
 <body>
 
     <div id="signup-container"
-        style="margin-bottom: 2rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1);">
+        style="margin-bottom: 2rem; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,0.1);"
+        onsubmit="return false;">
         <h1 style="margin-top: 0;">Sign Up</h1>
         <form id="signupForm" style="display: flex; flex-direction: column; gap: 0.75rem;">
             <input type="text" id="signup-username" placeholder="Username" required
                 style="padding: 0.6rem; border-radius: 6px; border: 1px solid #ccc;">
             <input type="password" id="signup-password" placeholder="Password" required
                 style="padding: 0.6rem; border-radius: 6px; border: 1px solid #ccc;">
-            <button type="submit"
+            <button id="registerBtn"
                 style="padding: 0.6rem; border-radius: 6px; background-color: #007bff; color: white; border: none; font-size: 1rem; cursor: pointer;">
                 Register
             </button>
@@ -216,12 +217,14 @@
         const taskInput = document.getElementById('task-title');
         window.currentUserId = null;
         const apiBase = `http://localhost:5000/tasks`;
-        document.getElementById('signupForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
 
+        document.getElementById('signupForm').addEventListener('click', async function (e) {
+            e.preventDefault();
             const username = document.getElementById('signup-username').value;
             const password = document.getElementById('signup-password').value;
             const message = document.getElementById('signup-message');
+
+            console.log("Clicked register with", username, password);
 
             try {
                 const response = await fetch('http://localhost:5000/register', {
@@ -231,6 +234,7 @@
                 });
 
                 const data = await response.json();
+                console.log("Server response:", response.status, data);
 
                 if (response.ok) {
                     window.currentUserId = data.user_id;
